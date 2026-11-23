@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Playground 3D - Learn How LLMs Work in 3D</title>
+  <meta name="description" content="A friendly, beginner-first 3D playground for exploring and learning how LLMs work using the Groq API and Three.js.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%2226%22 font-size=%2226%22>⚡</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Markdown parser for assistant responses -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+</head>
+<body>
+  <div id="app" class="app-layout">
+    
+    <!-- Top Header -->
+    <header class="app-header" role="banner">
+      <div class="header-left">
+        <div class="logo-group">
+          <div class="logo-cube">
+            <span class="logo-icon">⚡</span>
+          </div>
+          <div class="logo-titles">
+            <h1 class="app-title">LLM Playground <span class="highlight-3d">3D</span></h1>
+            <span class="app-subtitle">Powered by Groq LPUs & Three.js</span>
+          </div>
+        </div>
+
+        <!-- Model Dropdown -->
+        <div class="model-select-wrapper">
+          <label for="model-select" class="sr-only">Choose AI Model</label>
+          <div class="select-badge-container">
+            <span class="select-icon">🤖</span>
+            <select id="model-select" class="model-select" aria-label="Select Groq LLM Model">
+              <!-- Default Fallback Models -->
+              <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B Versatile (128k)</option>
+              <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (128k)</option>
+              <option value="openai/gpt-oss-20b">OpenAI GPT-OSS 20B (8k)</option>
+              <option value="openai/gpt-oss-120b">OpenAI GPT-OSS 120B (8k)</option>
+            </select>
+            <span class="dropdown-chevron">▼</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Status Badge -->
+        <div id="status-badge" class="status-badge badge-amber" role="status" aria-live="polite">
+          <span class="status-dot"></span>
+          <span class="status-text">Add a key to start</span>
+        </div>
+
+        <!-- View Code Button -->
+        <button id="view-code-btn" class="btn btn-secondary header-btn" aria-haspopup="dialog" title="View equivalent Curl, Python, and JavaScript code">
+          <span class="btn-icon">📋</span>
+          <span>View Code</span>
+        </button>
+
+        <!-- Replay Tour Button -->
+        <button id="help-tour-btn" class="btn btn-ghost header-btn icon-only" title="Replay Tokie's Guided Tour" aria-label="Replay Tokie Guided Tour">
+          <span>❓ Tour</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="app-body">
+      
+      <!-- Left Sidebar: Controls & Settings -->
+      <aside class="sidebar-panel" aria-label="Playground Controls">
+        <div class="sidebar-scroll-content">
+          
+          <!-- Section 1: Groq API Key -->
+          <div class="control-card" id="api-key-card">
+            <div class="control-header">
+              <label for="api-key-input" class="control-title">Groq API Key</label>
+              <span class="control-badge badge-info" title="Keys are processed directly in your browser">Direct Browser Call</span>
+            </div>
+            <p class="control-desc">Free ultra-fast inference on Groq LPUs. Get one at console.groq.com.</p>
+            
+            <div class="input-password-wrapper">
+              <input 
+                type="password" 
+                id="api-key-input" 
+                class="text-input" 
+                placeholder="gsk_..." 
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Groq API Key"
+              >
+              <button type="button" id="toggle-key-visibility" class="btn-input-action" title="Toggle visibility" aria-label="Toggle key visibility">👁️</button>
+            </div>
+
+            <div class="key-actions-row">
+              <label class="checkbox-label" title="Store key temporarily in this tab's sessionStorage">
+                <input type="checkbox" id="remember-key-checkbox" checked>
+                <span>Remember in this tab</span>
+              </label>
+              <button type="button" id="clear-key-btn" class="btn-link danger-link">Clear</button>
+            </div>
+
+            <div class="security-note">
+              <span class="security-lock">🔒</span>
+              <span>Your key never leaves your browser. All API calls go straight to Groq.</span>
+            </div>
+          </div>
+
+          <!-- Section 2: Temperature -->
+          <div class="control-card">
+            <div class="control-header">
+              <label for="temp-slider" class="control-title">Temperature</label>
+              <div class="slider-val-box">
+                <input type="number" id="temp-num-input" min="0" max="2" step="0.05" value="0.70" class="num-input" aria-label="Temperature value">
+              </div>
+            </div>
+            <p class="control-desc">Controls randomness: 0 is strict & deterministic, 2 is wild & creative.</p>
+            
+            <div class="slider-track-wrap">
+              <input type="range" id="temp-slider" min="0" max="2" step="0.05" value="0.70" class="custom-slider" aria-label="Temperature slider">
+              <div class="slider-ticks">
+                <span>0.0 (Precise)</span>
+                <span>0.7 (Balanced)</span>
+                <span>2.0 (Wild)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Max Tokens -->
+          <div class="control-card">
+            <div class="control-header">
+              <label for="max-tokens-slider" class="control-title">Max Tokens</label>
+              <div class="slider-val-box">
+                <input type="number" id="max-tokens-num-input" min="16" max="8192" step="16" value="1024" class="num-input" aria-label="Max tokens value">
+              </div>
+            </div>
+            <p class="control-desc">Maximum output length generated by the model in this turn.</p>
+            
+            <div class="slider-track-wrap">
+              <input type="range" id="max-tokens-slider" min="64" max="4096" step="64" value="1024" class="custom-slider" aria-label="Max tokens slider">
+              <div class="slider-ticks">
+                <span>64 (Short)</span>
+                <span>1024 (Standard)</span>
+                <span>4096 (Long)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Stop Sequences -->
+          <div class="control-card">
+            <div class="control-header">
+              <label for="stop-seq-input" class="control-title">Stop Sequences</label>
+              <span class="control-tag">Max 4</span>
+            </div>
+            <p class="control-desc">Phrases that tell the model to halt generating immediately.</p>
+            <input 
+              type="text" 
+              id="stop-seq-input" 
+              class="text-input" 
+              placeholder="e.g. ###, END, User:" 
+              aria-label="Comma-separated stop sequences"
+            >
+          </div>
+
+          <!-- Section 5: Model Capabilities & Toggles -->
+          <div class="control-card">
+            <div class="control-header">
+              <span class="control-title">Model Capabilities</span>
+            </div>
+
+            <!-- Web Search Toggle -->
+            <div class="toggle-row disabled" id="web-search-row" title="Web search is only available on compound web models">
+              <div class="toggle-info">
+                <span class="toggle-name">Web Search</span>
+                <span class="toggle-sub" id="web-search-sub">Available on Groq compound web models</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="web-search-toggle" disabled>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+
+            <!-- Reasoning Toggle -->
+            <div class="toggle-row" id="reasoning-row">
+              <div class="toggle-info">
+                <span class="toggle-name">Extended Reasoning</span>
+                <span class="toggle-sub" id="reasoning-sub">Toggles thinking tokens (DeepSeek-R1)</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="reasoning-toggle">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section 6: System Instructions (Collapsible) -->
+          <div class="control-card">
+            <details class="system-prompt-details">
+              <summary class="system-prompt-summary">
+                <span class="control-title">System Instructions</span>
+                <span class="summary-arrow">▼</span>
+              </summary>
+              <p class="control-desc" style="margin-top: 8px;">Guiding directives or persistent persona instructions.</p>
+              <textarea 
+                id="system-prompt-input" 
+                class="system-textarea" 
+                rows="3" 
+                placeholder="e.g. You are a helpful AI tutor who explains complex ideas in simple analogies."
+                aria-label="System instructions"
+              ></textarea>
+            </details>
+          </div>
+
+          <!-- Section 7: Reset Conversation -->
+          <div class="sidebar-footer-actions">
+            <button type="button" id="reset-chat-btn" class="btn btn-outline-danger full-width" title="Clear all turns and reset context tokens">
+              <span class="btn-icon">🗑️</span>
+              <span>Reset Conversation</span>
+            </button>
+          </div>
+
+        </div>
+      </aside>
+
+      <!-- Center & Right: Main Workspace -->
+      <main class="main-workspace">
+        
+        <!-- Top Half: 3D Visualizer & Speed/Token Dashboard -->
+        <section class="visualizer-section" aria-label="3D Visualizer & Dashboard">
+          
+          <!-- 3D Header Bar & Tabs -->
+          <div class="visualizer-header">
+            <div class="tabs-nav" role="tablist" aria-label="3D View Selection">
+              <button class="tab-btn active" role="tab" aria-selected="true" data-view="stream">
+                <span class="tab-icon">⚡</span>
+                <span>Token Stream</span>
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-view="context">
+                <span class="tab-icon">🏢</span>
+                <span>Context Tower</span>
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-view="quota">
+                <span class="tab-icon">⏱️</span>
+                <span>Rate Gauge</span>
+              </button>
+              <button class="tab-btn" role="tab" aria-selected="false" data-view="temperature">
+                <span class="tab-icon">🔥</span>
+                <span>Temp Cloud</span>
+              </button>
+            </div>
+
+            <!-- 3D Controls & Orbit Hint -->
+            <div class="visualizer-controls">
+              <div class="orbit-hint" title="Use your mouse/touch to interact">
+                <span>🖱️ Drag to orbit</span>
+              </div>
+              <label class="checkbox-label compact" title="Toggle simplified graphics for lower battery/GPU usage">
+                <input type="checkbox" id="reduce-3d-checkbox">
+                <span>Reduce 3D</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 3D Canvas Viewport -->
+          <div id="canvas-3d-container" class="canvas-3d-container" aria-label="Interactive 3D Three.js canvas">
+            <!-- Three.js WebGL canvas injected here -->
+            
+            <!-- View Overlay Subtitles -->
+            <div class="view-overlay-info" id="view-overlay-info">
+              <span class="view-badge" id="view-badge-title">3D TOKEN STREAM</span>
+              <span class="view-desc" id="view-badge-desc">Watch incoming tokens fly in 3D into the response portal. Colored by word, number & punctuation!</span>
+            </div>
+          </div>
+
+          <!-- Speed & Token Dashboard Strip -->
+          <div class="dashboard-strip" aria-label="Generation & Rate Limit Metrics">
+            
+            <!-- Metric 1: TTFT -->
+            <div class="metric-card" title="Time To First Token: How fast Groq began streaming the response">
+              <div class="metric-label">TTFT</div>
+              <div class="metric-value" id="metric-ttft">0 <span class="metric-unit">ms</span></div>
+              <div class="metric-caption">Time to first token</div>
+            </div>
+
+            <!-- Metric 2: Speed (Tokens / Sec) -->
+            <div class="metric-card highlight-metric" title="Generation throughput in tokens per second">
+              <div class="metric-label">Speed</div>
+              <div class="metric-value orange-glow" id="metric-speed">0.0 <span class="metric-unit">t/s</span></div>
+              <div class="metric-caption">LPU throughput</div>
+            </div>
+
+            <!-- Metric 3: Total Time -->
+            <div class="metric-card" title="Total response generation time in seconds">
+              <div class="metric-label">Duration</div>
+              <div class="metric-value" id="metric-duration">0.0 <span class="metric-unit">s</span></div>
+              <div class="metric-caption">Total elapsed time</div>
+            </div>
+
+            <!-- Metric 4: Token Usage -->
+            <div class="metric-card" title="Tokens consumed: Input (Prompt) + Output (Completion) = Total">
+              <div class="metric-label">Tokens (In / Out / Tot)</div>
+              <div class="metric-value" id="metric-tokens">0 / 0 / 0</div>
+              <div class="metric-caption" id="metric-reasoning-caption">Reasoning: 0 tokens</div>
+            </div>
+
+            <!-- Metric 5: Groq Rate Limit Quota -->
+            <div class="metric-card" title="Remaining tokens allowed this minute from Groq x-ratelimit headers">
+              <div class="metric-label">Tokens Left / Min</div>
+              <div class="metric-value green-glow" id="metric-quota">30,000</div>
+              <div class="metric-caption" id="metric-reset-caption">Resets in 0s</div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- Bottom Half: Chat Conversation & Prompting Console -->
+        <section class="console-section" aria-label="Conversation and Prompt Console">
+          
+          <!-- Conversation History Panel -->
+          <div class="chat-history-container" id="chat-history-container" role="log" aria-live="polite">
+            <div class="chat-placeholder" id="chat-placeholder">
+              <div class="placeholder-icon">🚀</div>
+              <h3>Your 3D Playground is Ready</h3>
+              <p>Type a prompt below or pick one of the beginner-friendly example chips to start chatting!</p>
+            </div>
+            <!-- Messages dynamically inserted here -->
+          </div>
+
+          <!-- Multi-turn token growth note -->
+          <div class="multiturn-notice" id="multiturn-notice" style="display: none;">
+            <span class="notice-icon">💡</span>
+            <span><strong>Why do input tokens grow each turn?</strong> Multi-turn LLMs are stateless; we re-send the full conversation history with each message so the model remembers past turns!</span>
+          </div>
+
+          <!-- Live Prompt Analysis Bar -->
+          <div class="analyzer-bar" id="analyzer-bar" aria-label="Live Prompt Analysis">
+            <div class="analyzer-header-row">
+              <div class="analyzer-badge-group">
+                <span class="analyzer-badge badge-zero" id="analyzer-shot-badge">ZERO-SHOT (0)</span>
+                <span class="analyzer-tag" id="tag-cot" title="Chain-of-thought helps with reasoning">✗ CoT</span>
+                <span class="analyzer-tag" id="tag-role" title="Role gives persona and anchors style">✗ Role</span>
+                <span class="analyzer-tag" id="tag-neg" title="Negative constraints prevent unwanted output">✗ Negative</span>
+                <span class="analyzer-tag" id="tag-format" title="Format constraints enforce structured layouts">✗ Format</span>
+              </div>
+              <div class="analyzer-evidence" id="analyzer-evidence" title="Matched patterns in your prompt"></div>
+            </div>
+            <div class="analyzer-tip" id="analyzer-tip">
+              Start typing a prompt or choose an example chip below to see live analysis!
+            </div>
+          </div>
+
+          <!-- Example Prompt Chips -->
+          <div class="example-chips-row" aria-label="Prompt Templates">
+            <span class="chips-label">Quick Prompts:</span>
+            <button type="button" class="chip-btn" data-preset="few-shot" title="Teaches model pattern via Input/Output examples">
+              🏷️ Sentiment Few-Shot
+            </button>
+            <button type="button" class="chip-btn" data-preset="cot" title="Forces step-by-step logic for math & puzzles">
+              🧠 Chain-of-Thought Math
+            </button>
+            <button type="button" class="chip-btn" data-preset="role" title="Assigns an expressive persona">
+              🏴‍☠️ Pirate Role Prompt
+            </button>
+            <button type="button" class="chip-btn" data-preset="json" title="Enforces strict structured JSON format">
+              📐 JSON Format Output
+            </button>
+          </div>
+
+          <!-- Prompt Input Area -->
+          <div class="prompt-input-wrapper">
+            <textarea 
+              id="prompt-input" 
+              class="prompt-textarea" 
+              placeholder="Ask anything, test few-shot prompts, or experiment with reasoning... (Ctrl/Cmd + Enter to send)"
+              rows="3"
+              aria-label="Prompt input"
+            ></textarea>
+
+            <div class="prompt-actions">
+              <div class="prompt-shortcut-hint">
+                <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to run • <kbd>Esc</kbd> to stop
+              </div>
+              <div class="prompt-buttons">
+                <button type="button" id="stop-generation-btn" class="btn btn-secondary" style="display: none;" title="Halt current generation">
+                  <span>⏹ Stop</span>
+                </button>
+                <button type="button" id="submit-prompt-btn" class="btn btn-primary" title="Send prompt to Groq API">
+                  <span class="btn-spinner" style="display: none;"></span>
+                  <span class="btn-text">Submit ➔</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+      </main>
+
+    </div>
+
+    <!-- Tokie 3D Mascot Widget (Bottom Right) -->
+    <div class="tokie-dock" id="tokie-dock" aria-label="Tokie Mascot">
+      <!-- Floating Speech Bubble -->
+      <div class="tokie-speech-bubble" id="tokie-speech-bubble" role="dialog" aria-live="polite">
+        <!-- Dynamically filled by mascot.js -->
+      </div>
+      <!-- 3D Mascot Head Canvas -->
+      <div class="tokie-canvas-wrap" id="tokie-canvas-wrap" title="Hi, I'm Tokie! Click me for tips or to replay the tour.">
+        <!-- Mascot Three.js Canvas injected here -->
+      </div>
+    </div>
+
+    <!-- "View Code" Modal -->
+    <div class="modal-backdrop" id="code-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-icon">💻</span>
+            <h2 id="modal-title" class="modal-title">Export API Code</h2>
+          </div>
+          <button type="button" class="modal-close-btn" id="modal-close-btn" aria-label="Close code modal">✕</button>
+        </div>
+        
+        <p class="modal-subtitle">
+          Exact code equivalent for your current model, parameters, and conversation history.
+        </p>
+
+        <!-- Code Language Tabs -->
+        <div class="code-tabs">
+          <button type="button" class="code-tab-btn active" data-lang="curl">cURL (CLI)</button>
+          <button type="button" class="code-tab-btn" data-lang="python">Python (Groq SDK)</button>
+          <button type="button" class="code-tab-btn" data-lang="javascript">JavaScript (Fetch)</button>
+        </div>
+
+        <!-- Code View Box -->
+        <div class="code-display-wrap">
+          <button type="button" class="copy-code-btn" id="copy-code-btn" title="Copy code snippet to clipboard">
+            <span id="copy-btn-text">📋 Copy Code</span>
+          </button>
+          <pre class="code-pre"><code id="code-snippet-body" class="code-body">Loading code...</code></pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Main JavaScript App Entry -->
+  <script type="module" src="ui.js"></script>
+</body>
+</html>
+
